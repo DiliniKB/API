@@ -1,0 +1,27 @@
+from pydantic_settings import BaseSettings
+from functools import lru_cache
+
+class Settings(BaseSettings):
+    # Database
+    database_url: str
+    
+    # JWT Auth
+    secret_key: str
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 10080
+    
+    # Claude API (optional for now)
+    anthropic_api_key: str = ""
+    
+    # Environment
+    environment: str = "development"
+    
+    class Config:
+        env_file = ".env"
+        case_sensitive = False
+
+@lru_cache()
+def get_settings():
+    return Settings()
+
+settings = get_settings()
