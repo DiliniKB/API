@@ -7,4 +7,15 @@ python-jose[cryptography]==3.3.0
 passlib[bcrypt]==4.0.1
 python-dotenv==1.0.0
 pydantic==2.5.3
-pydantic-settings==2.1.0email-validator==2.1.0
+pydantic-settings==2.1.0
+email-validator==2.1.0
+
+# LangGraph and AI
+langgraph==0.2.45
+langchain-core==0.3.15
+langchain-openai==0.2.5
+langchain==0.3.7
+
+# Optional: For Claude when you get API key
+anthropic==0.39.0
+langchain-anthropic==0.3.0
