@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 10080
     
-    # Claude API (optional for now)
+    openai_api_key: str = ""
     anthropic_api_key: str = ""
     
     # Environment
