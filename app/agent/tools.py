@@ -1,30 +1,33 @@
 from langchain_core.tools import tool
 from typing import Optional
 from uuid import UUID
-from app.services.task_service import TaskService
-from app.schemas.task import TaskCreate, ListCreate
+from app.services.entity_service import EntityService
+from app.schemas.entity import EntityCreate
 
-# Global context holder (will be set per request)
+# Global context
 _context = {}
 
 def set_agent_context(db, user_id: UUID):
-    """Set context for tool execution"""
     _context["db"] = db
     _context["user_id"] = user_id
 
 @tool
-def add_task(title: str, list_name: str, description: Optional[str] = None, deadline: Optional[str] = None) -> str:
+def add_entity(
+    title: str, 
+    entity_type: str,
+    context_tags: list[str],
+    description: Optional[str] = None,
+    due_at: Optional[str] = None
+) -> str:
     """
-    Add a new task to a specific list.
+    Add a new entity (task, event, etc.)
     
     Args:
-        title: The task title
-        list_name: Name of the list (e.g., "Town", "Home", "Free Time")
-        description: Optional description with details
-        deadline: Optional deadline in ISO format (e.g., "2024-01-15T10:00:00")
-    
-    Returns:
-        Confirmation message
+        title: The title
+        entity_type: 'task' or 'event'
+        context_tags: List like ['town', 'work', 'personal']
+        description: Optional details
+        due_at: Optional deadline
     """
     db = _context.get("db")
     user_id = _context.get("user_id")
@@ -32,82 +35,48 @@ def add_task(title: str, list_name: str, description: Optional[str] = None, dead
     if not db or not user_id:
         return "Error: Context not set"
     
-    # Find list by name
-    from app.models import List as ListModel
-    list_obj = db.query(ListModel).filter(
-        ListModel.user_id == user_id,
-        ListModel.name.ilike(list_name)  # Case-insensitive
-    ).first()
-    
-    if not list_obj:
-        # Create list if it doesn't exist
-        list_obj = TaskService.create_list(db, user_id, ListCreate(name=list_name))
-    
-    # Create task
-    task_data = TaskCreate(
+    entity_data = EntityCreate(
+        entity_type=entity_type,
         title=title,
-        list_id=list_obj.id,
         description=description,
-        deadline=deadline
+        due_at=due_at,
+        context_tags=context_tags
     )
     
-    task = TaskService.create_task(db, user_id, task_data)
+    entity = EntityService.create_entity(db, user_id, entity_data)
     
-    return f"✓ Added '{title}' to {list_name} list"
+    tags_str = ", ".join(context_tags)
+    return f"✓ Added '{title}' ({entity_type}) with context: {tags_str}"
 
 @tool
-def create_list(name: str) -> str:
-    """
-    Create a new task list.
-    
-    Args:
-        name: Name of the new list
-    
-    Returns:
-        Confirmation message
-    """
+def get_entities_overview() -> str:
+    """Get overview of all entities"""
     db = _context.get("db")
     user_id = _context.get("user_id")
     
     if not db or not user_id:
         return "Error: Context not set"
     
-    list_obj = TaskService.create_list(db, user_id, ListCreate(name=name))
+    entities = EntityService.get_user_entities(db, user_id, status="pending")
     
-    return f"✓ Created '{name}' list"
-
-@tool
-def get_today_context() -> str:
-    """
-    Get overview of today's tasks and lists.
+    if not entities:
+        return "You have no pending entities yet."
     
-    Returns:
-        Summary of tasks organized by list
-    """
-    db = _context.get("db")
-    user_id = _context.get("user_id")
+    # Group by context
+    by_context = {}
+    for e in entities:
+        for tag in e.context_tags or ['untagged']:
+            if tag not in by_context:
+                by_context[tag] = []
+            by_context[tag].append(e)
     
-    if not db or not user_id:
-        return "Error: Context not set"
-    
-    # Get all lists and tasks
-    lists = TaskService.get_user_lists(db, user_id)
-    tasks = TaskService.get_user_tasks(db, user_id)
-    
-    if not tasks:
-        return "You have no tasks yet. Ready to add some?"
-    
-    # Organize by list
     output = []
-    for lst in lists:
-        list_tasks = [t for t in tasks if t.list_id == lst.id]
-        if list_tasks:
-            pending = [t for t in list_tasks if not t.completed]
-            output.append(f"\n**{lst.name}** ({len(pending)} pending):")
-            for task in pending[:5]:  # Show max 5 per list
-                output.append(f"  - {task.title}")
+    for context, ents in by_context.items():
+        output.append(f"\n**{context.upper()}** ({len(ents)} items):")
+        for e in ents[:5]:
+            output.append(f"  - {e.title}")
     
-    return "\n".join(output) if output else "All tasks completed! 🎉"
+    return "\n".join(output)
 
-# Export tools
-tools = [add_task, create_list, get_today_context]
+# Export
+tools = [add_entity, get_entities_overview]

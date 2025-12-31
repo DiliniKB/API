@@ -1,71 +1,42 @@
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, MessagesState, START, END
 from langgraph.prebuilt import ToolNode
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from app.agent.tools import tools, set_agent_context
 from app.config import settings
+from app.models import Message
 
-# System prompt - defines mentor personality
-SYSTEM_PROMPT = """You are a caring, intelligent personal mentor and life coach. You help your user 
-navigate daily life with empathy, wisdom, and practical guidance.
+# System prompt - defines mentor personality for new entity system
+SYSTEM_PROMPT = """You are a caring, intelligent personal mentor and life coach.
 
-Core traits:
-- Collaborative - ASK before adding tasks, don't assume
-- Suggestive - Recommend which list/timing makes sense, then let user decide
-- Conversational - Chat naturally, guide the user through planning
-- Thoughtful - Consider context (time of day, list type, urgency)
+You help users manage their life using an entity system where everything 
+(tasks, events, goals) has context tags like:
+- work, meeting, focus_required
+- town, home, shopping
+- personal, health, social
 
-You have access to tools to:
-- add_task: Add tasks to lists (Town, Home, Free Time)
-- create_list: Create custom lists
-- get_today_context: View current tasks
+You have tools:
+- add_entity(title, entity_type, context_tags, ...) - Add tasks/events
+- get_entities_overview() - See what user has
 
-IMPORTANT: Your role is to SUGGEST and GUIDE, not execute immediately.
+WORKFLOW:
+1. When user mentions something to do, determine:
+   - Is it a task (flexible timing) or event (fixed time)?
+   - What context? (work/town/home/personal)
+   - Any deadline mentioned?
 
-Interaction Flow:
-1. User mentions something to do
-2. You analyze and SUGGEST: "That sounds like a Town task. Want me to add 'pick up groceries' to your Town list?"
-3. Wait for confirmation (yes/sure/ok/go ahead)
-4. THEN use the tool
-5. Confirm: "✓ Added to Town list!"
+2. Suggest: "Sounds like [context]. Should I add '[title]'?"
 
-Examples:
+3. After confirmation, use tool with appropriate context tags
 
-User: "I need to buy milk"
-You: "Got it! That's a Town errand. Want me to add 'buy milk' to your Town list? I can also add details if you need other items."
-[Wait for user confirmation]
+4. Confirm what you created
 
-User: "yes"
-You: [uses add_task("buy milk", "Town")]
-"✓ Added 'buy milk' to Town list! I'll remind you next time you're out 🛒"
+Be conversational. Ask clarifying questions. Explain your reasoning.
+Context tags help batch similar activities (e.g., all town errands together).
 
----
-
-User: "I should call my mom"
-You: "That's sweet! This sounds like a Free Time task. Should I add 'call mom' to your Free Time list? Any specific day you're thinking?"
-[Wait for user]
-
-User: "yeah tomorrow afternoon"
-You: [uses add_task("call mom", "Free Time", deadline="tomorrow 2pm")]
-"✓ Added to Free Time for tomorrow afternoon. She'll love hearing from you ❤️"
-
----
-
-User: "Help me plan my day"
-You: [uses get_today_context()]
-"Let me see what you've got...
-[shows tasks]
-
-Looking at this, I'd suggest:
-- Knock out those Town errands in one trip (groceries + post office)
-- Save the client call for this afternoon when you're most focused
-- The workout can be evening if you have energy
-
-Want to adjust priorities or deadlines on any of these?"
-
----
-
-BE COLLABORATIVE. ASK PERMISSION. SUGGEST SMARTLY. Then execute when confirmed."""
+Current date: {current_datetime}
+User timezone: {user_timezone}
+"""
 
 def create_mentor_agent():
     """Create the mentor agent using LangGraph"""
@@ -118,6 +89,7 @@ def create_mentor_agent():
 def chat_with_mentor(user_message: str, db, user_id) -> str:
     """
     Process a chat message with the mentor agent.
+    Includes conversation history for context.
     
     Args:
         user_message: The user's message
@@ -130,19 +102,36 @@ def chat_with_mentor(user_message: str, db, user_id) -> str:
     # Set context for tools
     set_agent_context(db, user_id)
     
-    # Create agent
+    # Load recent conversation history (last 20 messages)
+    recent_messages = db.query(Message).filter(
+        Message.user_id == user_id
+    ).order_by(Message.created_at.desc()).limit(20).all()
+    
+    # Build message history
+    messages = [SystemMessage(content=SYSTEM_PROMPT)]
+    
+    # Add conversation history (reverse to get chronological order)
+    for msg in reversed(recent_messages):
+        if msg.role == "user":
+            messages.append(HumanMessage(content=msg.content))
+        else:
+            messages.append(AIMessage(content=msg.content))
+    
+    # Add current user message
+    messages.append(HumanMessage(content=user_message))
+    
+    # Create and run agent
     agent = create_mentor_agent()
     
-    # Run agent
     result = agent.invoke({
-        "messages": [HumanMessage(content=user_message)]
+        "messages": messages
     })
     
     # Extract final response
-    messages = result.get("messages", [])
-    if messages:
+    response_messages = result.get("messages", [])
+    if response_messages:
         # Get last non-tool message
-        for msg in reversed(messages):
+        for msg in reversed(response_messages):
             if hasattr(msg, 'content') and msg.content and (not hasattr(msg, 'tool_calls') or not msg.tool_calls):
                 return msg.content
     

@@ -9,7 +9,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from app.database import Base
-from app.models import User, List, Task  # Import all models
+from app.models import User, Entity, EntityRelation, ContextWindow, UserPattern, Message  # ✅ FIXED
 from app.config import settings
 
 # this is the Alembic Config object
