@@ -1,8 +1,8 @@
-"""add entity system and messages
+"""initial schema with entity system
 
-Revision ID: c79f93326a21
-Revises: 554ec6d6c720
-Create Date: 2025-12-31 23:20:07.234194
+Revision ID: 51158dcad7bc
+Revises: 
+Create Date: 2026-01-01 20:32:47.646108
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = 'c79f93326a21'
-down_revision: Union[str, None] = '554ec6d6c720'
+revision: str = '51158dcad7bc'
+down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -34,6 +34,31 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_context_windows_user_id'), 'context_windows', ['user_id'], unique=False)
+    op.create_table('user_patterns',
+    sa.Column('id', sa.UUID(), nullable=False),
+    sa.Column('user_id', sa.UUID(), nullable=False),
+    sa.Column('pattern_type', sa.String(length=50), nullable=False),
+    sa.Column('pattern_data', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+    sa.Column('confidence_score', sa.Float(), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('last_updated', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_user_patterns_user_id'), 'user_patterns', ['user_id'], unique=False)
+    op.create_table('users',
+    sa.Column('id', sa.UUID(), nullable=False),
+    sa.Column('email', sa.String(length=255), nullable=False),
+    sa.Column('password_hash', sa.String(length=255), nullable=False),
+    sa.Column('name', sa.String(length=255), nullable=True),
+    sa.Column('birth_date', sa.Date(), nullable=True),
+    sa.Column('birth_time', sa.Time(), nullable=True),
+    sa.Column('birth_location', sa.String(length=255), nullable=True),
+    sa.Column('timezone', sa.String(length=50), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
     op.create_table('entities',
     sa.Column('id', sa.UUID(), nullable=False),
     sa.Column('user_id', sa.UUID(), nullable=False),
@@ -54,6 +79,7 @@ def upgrade() -> None:
     sa.Column('extra_data', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_entities_due_at'), 'entities', ['due_at'], unique=False)
@@ -61,27 +87,6 @@ def upgrade() -> None:
     op.create_index(op.f('ix_entities_scheduled_at'), 'entities', ['scheduled_at'], unique=False)
     op.create_index(op.f('ix_entities_status'), 'entities', ['status'], unique=False)
     op.create_index(op.f('ix_entities_user_id'), 'entities', ['user_id'], unique=False)
-    op.create_table('user_patterns',
-    sa.Column('id', sa.UUID(), nullable=False),
-    sa.Column('user_id', sa.UUID(), nullable=False),
-    sa.Column('pattern_type', sa.String(length=50), nullable=False),
-    sa.Column('pattern_data', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
-    sa.Column('confidence_score', sa.Float(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-    sa.Column('last_updated', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_user_patterns_user_id'), 'user_patterns', ['user_id'], unique=False)
-    op.create_table('entity_relations',
-    sa.Column('id', sa.UUID(), nullable=False),
-    sa.Column('parent_id', sa.UUID(), nullable=False),
-    sa.Column('child_id', sa.UUID(), nullable=False),
-    sa.Column('relation_type', sa.String(length=50), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-    sa.ForeignKeyConstraint(['child_id'], ['entities.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['parent_id'], ['entities.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id')
-    )
     op.create_table('messages',
     sa.Column('id', sa.UUID(), nullable=False),
     sa.Column('user_id', sa.UUID(), nullable=False),
@@ -94,50 +99,35 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_messages_created_at'), 'messages', ['created_at'], unique=False)
     op.create_index(op.f('ix_messages_user_id'), 'messages', ['user_id'], unique=False)
-    op.drop_table('tasks')
-    op.drop_table('lists')
+    op.create_table('entity_relations',
+    sa.Column('id', sa.UUID(), nullable=False),
+    sa.Column('parent_id', sa.UUID(), nullable=False),
+    sa.Column('child_id', sa.UUID(), nullable=False),
+    sa.Column('relation_type', sa.String(length=50), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.ForeignKeyConstraint(['child_id'], ['entities.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['parent_id'], ['entities.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
     # ### commands auto generated by Alembic - please adjust! ###
-    op.create_table('tasks',
-    sa.Column('id', sa.UUID(), autoincrement=False, nullable=False),
-    sa.Column('user_id', sa.UUID(), autoincrement=False, nullable=False),
-    sa.Column('list_id', sa.UUID(), autoincrement=False, nullable=False),
-    sa.Column('title', sa.TEXT(), autoincrement=False, nullable=False),
-    sa.Column('description', sa.TEXT(), autoincrement=False, nullable=True),
-    sa.Column('deadline', postgresql.TIMESTAMP(timezone=True), autoincrement=False, nullable=True),
-    sa.Column('completed', sa.BOOLEAN(), autoincrement=False, nullable=True),
-    sa.Column('completed_at', postgresql.TIMESTAMP(timezone=True), autoincrement=False, nullable=True),
-    sa.Column('priority', sa.INTEGER(), autoincrement=False, nullable=True),
-    sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), server_default=sa.text('now()'), autoincrement=False, nullable=True),
-    sa.Column('updated_at', postgresql.TIMESTAMP(timezone=True), autoincrement=False, nullable=True),
-    sa.ForeignKeyConstraint(['list_id'], ['lists.id'], name='tasks_list_id_fkey', ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], name='tasks_user_id_fkey', ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id', name='tasks_pkey')
-    )
-    op.create_table('lists',
-    sa.Column('id', sa.UUID(), autoincrement=False, nullable=False),
-    sa.Column('user_id', sa.UUID(), autoincrement=False, nullable=False),
-    sa.Column('name', sa.VARCHAR(length=100), autoincrement=False, nullable=False),
-    sa.Column('is_default', sa.BOOLEAN(), autoincrement=False, nullable=True),
-    sa.Column('created_at', postgresql.TIMESTAMP(timezone=True), server_default=sa.text('now()'), autoincrement=False, nullable=True),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], name='lists_user_id_fkey', ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id', name='lists_pkey')
-    )
+    op.drop_table('entity_relations')
     op.drop_index(op.f('ix_messages_user_id'), table_name='messages')
     op.drop_index(op.f('ix_messages_created_at'), table_name='messages')
     op.drop_table('messages')
-    op.drop_table('entity_relations')
-    op.drop_index(op.f('ix_user_patterns_user_id'), table_name='user_patterns')
-    op.drop_table('user_patterns')
     op.drop_index(op.f('ix_entities_user_id'), table_name='entities')
     op.drop_index(op.f('ix_entities_status'), table_name='entities')
     op.drop_index(op.f('ix_entities_scheduled_at'), table_name='entities')
     op.drop_index(op.f('ix_entities_entity_type'), table_name='entities')
     op.drop_index(op.f('ix_entities_due_at'), table_name='entities')
     op.drop_table('entities')
+    op.drop_index(op.f('ix_users_email'), table_name='users')
+    op.drop_table('users')
+    op.drop_index(op.f('ix_user_patterns_user_id'), table_name='user_patterns')
+    op.drop_table('user_patterns')
     op.drop_index(op.f('ix_context_windows_user_id'), table_name='context_windows')
     op.drop_table('context_windows')
     # ### end Alembic commands ###
