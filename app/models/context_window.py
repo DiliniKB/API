@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Time, Integer, ARRAY
+from sqlalchemy import Column, String, Time, Integer, ARRAY, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -10,7 +10,11 @@ class ContextWindow(Base):
     __tablename__ = "context_windows"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    user_id = Column(
+        UUID(as_uuid=True), 
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False, 
+        index=True)
     
     window_type = Column(String(50), nullable=False)
     # Values: 'work_hours', 'morning_routine', 'evening_wind_down', 'weekend', 'focus_block'
