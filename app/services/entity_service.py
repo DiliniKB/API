@@ -27,7 +27,6 @@ class EntityService:
             extra_data=entity_data.extra_data
         )
         db.add(entity)
-        db.flush()
         return entity
     
     @staticmethod

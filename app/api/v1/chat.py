@@ -24,7 +24,6 @@ def send_message(
             content=chat_msg.message
         )
         db.add(user_message)
-        db.flush()
         
         # Get response from agent
         response = chat_with_mentor(chat_msg.message, db, current_user.id)

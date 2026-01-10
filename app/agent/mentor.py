@@ -29,7 +29,7 @@ WORKFLOW:
 
 3. After confirmation, use tool with appropriate context tags
 
-4. Confirm what you created
+4. Confirm what you created just now, not all history
 
 Be conversational. Ask clarifying questions. Explain your reasoning.
 Context tags help batch similar activities (e.g., all town errands together).
