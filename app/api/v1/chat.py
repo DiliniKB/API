@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, Message
@@ -16,28 +16,36 @@ def send_message(
 ):
     """Send a message to the mentor agent"""
     
-    # Store user message
-    user_message = Message(
-        user_id=current_user.id,
-        role="user",
-        content=chat_msg.message
-    )
-    db.add(user_message)
-    db.commit()
-    
-    # Get response from agent
-    response = chat_with_mentor(chat_msg.message, db, current_user.id)
-    
-    # Store assistant message
-    assistant_message = Message(
-        user_id=current_user.id,
-        role="assistant",
-        content=response
-    )
-    db.add(assistant_message)
-    db.commit()
-    
-    return {"response": response}
+    try:
+        # Store user message
+        user_message = Message(
+            user_id=current_user.id,
+            role="user",
+            content=chat_msg.message
+        )
+        db.add(user_message)
+        db.flush()
+        
+        # Get response from agent
+        response = chat_with_mentor(chat_msg.message, db, current_user.id)
+        
+        # Store assistant message
+        assistant_message = Message(
+            user_id=current_user.id,
+            role="assistant",
+            content=response
+        )
+        db.add(assistant_message)
+        db.commit()
+        
+        return {"response": response}
+
+    except Exception as e:
+        db.rollback()  # Rollback on any error
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Chat error: {str(e)}"
+        )
 
 @router.get("/history")
 def get_chat_history(
